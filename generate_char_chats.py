@@ -10,6 +10,7 @@ import openai
 from chars.io import read_jsonl, write_jsonl
 from chars.open_ai import openai_batch_completion, OpenAIDecodingArguments
 
+yaml = YAML(typ="rt")
 openai.api_key = os.getenv('OPENAI_TOKEN')
 
 
@@ -25,11 +26,11 @@ def encode_prompt(char, topic, template_path):
 
 
 def get_char_key(char):
-    return (char["name"].strip(), char["context"].strip())
+    return char["name"].strip(), char["context"].strip()
 
 
 def get_dialogue_key(char, topic):
-    return (char["name"].strip(), char["context"].strip(), topic)
+    return char["name"].strip(), char["context"].strip(), topic
 
 
 def parse_chat(result):
@@ -71,25 +72,25 @@ def parse_chat(result):
 def process_batch(batch, model_name, template_path):
     print("Processing batch...")
     print([r["name"] for (r, topic) in batch])
+
     prompts = [[
         {"role": "user", "content": encode_prompt(char, topic, template_path)}
     ] for char, topic in batch]
+
     results = openai_batch_completion(
         batch=prompts,
         model_name=model_name,
-        decoding_args=OpenAIDecodingArguments(
-            max_tokens=4026
-        )
+        decoding_args=OpenAIDecodingArguments(max_tokens=5033)
     )
 
     dialogues = defaultdict(list)
     for (char, topic), prompt, result in zip(batch, prompts, results):
         result = result.message["content"]
-        print(prompt[-1]["content"])
+        # print(prompt[-1]["content"])
         print(result)
-        print()
+        # print()
         print("=============")
-        print()
+        # print()
         chat = parse_chat(result)
         if chat is None:
             continue
@@ -180,7 +181,7 @@ def main(
 
 if __name__ == "__main__":
     main(
-        'characters_topics1.jsonl',
-        'characters_chats11.jsonl',
+        'character_topics.jsonl',
+        'character_chats.jsonl',
         'instructs/ru_char_chat.txt'
     )

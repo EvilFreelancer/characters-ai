@@ -12,9 +12,11 @@ openai.api_key = os.getenv('OPENAI_TOKEN')
 def encode_prompt(char, template_path):
     with open(template_path) as f:
         template = Template(f.read())
-    fields = ("name", "context", "greeting", "topics", "example_dialogue")
+    fields = ("name", "context", "greeting", "example_dialogue", "topics")
     char = {k: v for k, v in char.items() if k in fields}
-    return template.render(char_json=json.dumps(char, ensure_ascii=False)).strip() + "\n"
+    return template.render(
+        char_json=json.dumps(char, ensure_ascii=False)
+    ).strip() + "\n"
 
 
 def get_char_key(char):
@@ -25,11 +27,13 @@ def process_batch(batch, model_name, template_path):
     prompts = [[
         {"role": "user", "content": encode_prompt(r, template_path)}
     ] for r in batch]
+
     results = openai_batch_completion(
         batch=prompts,
         model_name=model_name,
         decoding_args=OpenAIDecodingArguments(max_tokens=5033)
     )
+
     chars = []
     for char, prompt, result in zip(batch, prompts, results):
         print(f"Character: {char['name']}")

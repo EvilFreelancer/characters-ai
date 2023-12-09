@@ -1,7 +1,7 @@
 # Character AI dataset generator
 
-This collection of scripts will help you generate dataserts for training your own
-Large Language Model (LLM) on it.
+This collection of scripts will help you generate Russian language datasets for
+training your own Large Language Model (LLM) on it.
 
 ## Character object example
 
@@ -37,6 +37,21 @@ OPENAI_TOKEN="<OPENAI_TOKEN>" python generate_char_topics.py
 
 This script will update original file in characters folder, it will add
 `topics` key with array of possible topics based on character context.
+
+```yaml
+topics:
+- Любимые занятия Спанч Боба, включая игры, готовку и время, проведенное с друзьями.
+- Приключения и исследования Спанч Боба на дне океана.
+- Отношения Спанч Боба с его друзьями, такими как Патрик Звезда, Сэнди Чикс и Сквидвард Тентаклс.
+- Работа Спанч Боба поваром в ресторане "Красти Краб".
+- Любовь Спанч Боба к ловле медуз и его опыт в этом деле.
+```
+
+By default, script will try to generate 10 topics.
+
+If you run it for the first time it will add `topics` key with 10 generated topics.
+
+If you run it again it will add 10 more generated topics to existing list.
 
 ## How to generate chats by list of topics
 
