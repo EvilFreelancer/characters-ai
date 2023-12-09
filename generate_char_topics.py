@@ -1,21 +1,18 @@
 import json
 import os
-import shutil
 import openai
-
-from tqdm import tqdm
+from ruamel.yaml import YAML
 from jinja2 import Template
-
-from chars.io import write_jsonl, read_jsonl
 from chars.open_ai import OpenAIDecodingArguments, openai_batch_completion
 
+yaml = YAML(typ="rt")
 openai.api_key = os.getenv('OPENAI_TOKEN')
 
 
 def encode_prompt(char, template_path):
     with open(template_path) as f:
         template = Template(f.read())
-    fields = ("name", "context", "greeting", "example_dialogue")
+    fields = ("name", "context", "greeting", "topics", "example_dialogue")
     char = {k: v for k, v in char.items() if k in fields}
     return template.render(char_json=json.dumps(char, ensure_ascii=False)).strip() + "\n"
 
@@ -35,6 +32,7 @@ def process_batch(batch, model_name, template_path):
     )
     chars = []
     for char, prompt, result in zip(batch, prompts, results):
+        print(f"Character: {char['name']}")
         result = result.message["content"]
         topics = result.split("\n")
         cleaned_topics = []
@@ -46,57 +44,47 @@ def process_batch(batch, model_name, template_path):
                 continue
             topic = " ".join(topic.strip().split(" ")[1:])
             cleaned_topics.append(topic)
-        print(prompt[-1]["content"])
+        # print(prompt[-1]["content"])
         print(cleaned_topics)
-        print()
         print("=============")
-        print()
-        char["topics"] = cleaned_topics
+        if "topics" in char:
+            char["topics"] += cleaned_topics
+        else:
+            char["topics"] = cleaned_topics
         chars.append(char)
     return chars
 
 
-def main(
-        chars_path,
-        output_path,
+def generate_char_topics(
+        input_directory,
         template_path,
-        model_name="gpt-3.5-turbo-16k",
-        request_batch_size=1
+        model_name="gpt-3.5-turbo-16k"
 ):
-    existing_keys = set()
-    output_records = []
-    if os.path.exists(output_path):
-        with open(output_path) as f:
-            output_records = [json.loads(line) for line in f]
-            existing_keys = {get_char_key(r) for r in output_records}
-    print(f"Existing keys: {len(existing_keys)}")
+    if not os.path.isdir(input_directory):
+        print(f"The directory {input_directory} does not exist.")
+        return
 
-    chars = read_jsonl(chars_path)
-    batch = []
-    for char in tqdm(chars):
-        key = get_char_key(char)
-        if key in existing_keys:
-            print(f"Skipping {key}")
-            continue
-        batch.append(char)
-        if len(batch) != request_batch_size:
-            continue
-        updated_chars = process_batch(batch, model_name, template_path)
-        output_records.extend(updated_chars)
-        batch = []
-        write_jsonl(output_records, output_path + "_tmp")
-        shutil.move(output_path + "_tmp", output_path)
+    for filename in os.listdir(input_directory):
+        full_path = os.path.join(input_directory, filename)
+        if not os.path.isfile(full_path):
+            print(f"{filename} is not a file, skip...")
 
-    if batch:
-        updated_chars = process_batch(batch, model_name, template_path)
-        output_records.extend(updated_chars)
-        write_jsonl(output_records, output_path + "_tmp")
-        shutil.move(output_path + "_tmp", output_path)
+        # Skip all non-topics files
+        name_without_extension, extension = os.path.splitext(full_path)
+        if extension in ['.yml', '.yaml']:
+            # Read details about character
+            with open(full_path, 'r', encoding='utf-8') as yaml_file:
+                yaml_content = yaml.load(yaml_file)
+            # Generate topics based on context
+            updated_char = process_batch([yaml_content], model_name, template_path)[0]
+            # Save topics to original file
+            with open(full_path, 'w', encoding='utf-8') as yaml_file:
+                yaml.dump(updated_char, yaml_file)
+                print(f"File {filename} successfully updated.")
 
 
 if __name__ == "__main__":
-    main(
-        'characters.jsonl',
-        'characters_topics.jsonl',
+    generate_char_topics(
+        'characters',
         'instructs/ru_char_topics.txt'
     )
