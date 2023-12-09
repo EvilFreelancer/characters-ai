@@ -19,10 +19,6 @@ def encode_prompt(char, template_path):
     ).strip() + "\n"
 
 
-def get_char_key(char):
-    return char["name"].strip(), char["context"].strip()
-
-
 def process_batch(batch, model_name, template_path):
     prompts = [[
         {"role": "user", "content": encode_prompt(r, template_path)}
@@ -31,7 +27,7 @@ def process_batch(batch, model_name, template_path):
     results = openai_batch_completion(
         batch=prompts,
         model_name=model_name,
-        decoding_args=OpenAIDecodingArguments(max_tokens=5033)
+        decoding_args=OpenAIDecodingArguments(max_tokens=4096)
     )
 
     chars = []
@@ -52,7 +48,7 @@ def process_batch(batch, model_name, template_path):
         print(cleaned_topics)
         print("=============")
         if "topics" in char:
-            char["topics"] += cleaned_topics
+            char["dialogues"].extend(cleaned_topics)
         else:
             char["topics"] = cleaned_topics
         chars.append(char)
@@ -73,18 +69,23 @@ def generate_char_topics(
         if not os.path.isfile(full_path):
             print(f"{filename} is not a file, skip...")
 
-        # Skip all non-topics files
+        # Skip all non-YAML files
         name_without_extension, extension = os.path.splitext(full_path)
-        if extension in ['.yml', '.yaml']:
-            # Read details about character
-            with open(full_path, 'r', encoding='utf-8') as yaml_file:
-                yaml_content = yaml.load(yaml_file)
-            # Generate topics based on context
-            updated_char = process_batch([yaml_content], model_name, template_path)[0]
-            # Save topics to original file
-            with open(full_path, 'w', encoding='utf-8') as yaml_file:
-                yaml.dump(updated_char, yaml_file)
-                # print(f"File {filename} successfully updated.")
+        if extension not in ['.yml', '.yaml']:
+            print(f"{filename} is not a YAML-file, skip...")
+            continue
+
+        # Read details about character
+        with open(full_path, 'r', encoding='utf-8') as yaml_file:
+            char_data = yaml.load(yaml_file)
+
+        # Generate topics based on context
+        updated_char = process_batch([char_data], model_name, template_path)[0]
+
+        # Save topics to original file
+        with open(full_path, 'w', encoding='utf-8') as yaml_file:
+            yaml.dump(updated_char, yaml_file)
+            # print(f"File {filename} successfully updated.")
 
 
 if __name__ == "__main__":

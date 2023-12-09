@@ -1,13 +1,8 @@
 import json
-import copy
 import os
-import shutil
-from collections import defaultdict
+from ruamel.yaml import YAML
 from jinja2 import Template
-from tqdm import tqdm
 import openai
-
-from chars.io import read_jsonl, write_jsonl
 from chars.open_ai import openai_batch_completion, OpenAIDecodingArguments
 
 yaml = YAML(typ="rt")
@@ -23,14 +18,6 @@ def encode_prompt(char, topic, template_path):
         char_json=json.dumps(char, ensure_ascii=False),
         topic=topic
     ).strip() + "\n"
-
-
-def get_char_key(char):
-    return char["name"].strip(), char["context"].strip()
-
-
-def get_dialogue_key(char, topic):
-    return char["name"].strip(), char["context"].strip(), topic
 
 
 def parse_chat(result):
@@ -70,9 +57,6 @@ def parse_chat(result):
 
 
 def process_batch(batch, model_name, template_path):
-    print("Processing batch...")
-    print([r["name"] for (r, topic) in batch])
-
     prompts = [[
         {"role": "user", "content": encode_prompt(char, topic, template_path)}
     ] for char, topic in batch]
@@ -80,17 +64,14 @@ def process_batch(batch, model_name, template_path):
     results = openai_batch_completion(
         batch=prompts,
         model_name=model_name,
-        decoding_args=OpenAIDecodingArguments(max_tokens=5033)
+        decoding_args=OpenAIDecodingArguments(max_tokens=4096)
     )
 
-    dialogues = defaultdict(list)
+    dialogues = []
     for (char, topic), prompt, result in zip(batch, prompts, results):
         result = result.message["content"]
-        # print(prompt[-1]["content"])
         print(result)
-        # print()
         print("=============")
-        # print()
         chat = parse_chat(result)
         if chat is None:
             continue
@@ -99,89 +80,56 @@ def process_batch(batch, model_name, template_path):
             "chat": chat,
             "model_name": model_name
         }
-        key = get_char_key(char)
-        dialogues[key].append(chat)
+        dialogues.append(chat)
+
     return dialogues
 
 
-def fix_output_records(records):
-    for char in records:
-        unique_dialogues = dict()
-        topics = char["topics"]
-        if "dialogues" in char:
-            for dialogue in char["dialogues"]:
-                topic = dialogue["topic"]
-                if topic in topics:
-                    unique_dialogues[dialogue["topic"]] = dialogue
-            char["dialogues"] = list(unique_dialogues.values())
-    return records
-
-
-def main(
-        chars_path,
-        output_path,
+def generate_char_chats(
+        input_directory,
         template_path,
-        request_batch_size=1
+        model_name="gpt-3.5-turbo-16k"
 ):
-    existing_keys = set()
-    output_records = dict()
-    if os.path.exists(output_path):
-        with open(output_path) as f:
-            output_records = [json.loads(line) for line in f]
-            output_records = fix_output_records(output_records)
-            for record in output_records:
-                if "dialogues" in record:
-                    for dialogue in record["dialogues"]:
-                        topic = dialogue["topic"]
-                        existing_keys.add(get_dialogue_key(record, topic))
-            output_records = {get_char_key(char): char for char in output_records}
-    print(f"Existing keys: {len(existing_keys)}")
+    if not os.path.isdir(input_directory):
+        print(f"The directory {input_directory} does not exist.")
+        return
 
-    batch = []
-    chars = read_jsonl(chars_path)
-    for idx, char in enumerate(chars):
-        key = get_char_key(char)
-        if key in output_records:
-            chars[idx] = copy.deepcopy(output_records[key])
+    for filename in os.listdir(input_directory):
+        full_path = os.path.join(input_directory, filename)
+        if not os.path.isfile(full_path):
+            print(f"{filename} is not a file, skip...")
+            continue
 
-    key2idx = {get_char_key(char): idx for idx, char in enumerate(chars)}
+        # Skip all non-YAML files
+        name_without_extension, extension = os.path.splitext(full_path)
+        if extension not in ['.yml', '.yaml']:
+            print(f"{filename} is not a YAML-file, skip...")
+            continue
 
-    def add_dialogues(dialogues):
-        for key, char_dialogues in dialogues.items():
-            idx = key2idx[key]
-            char = chars[idx]
-            if "dialogues" not in char:
-                char["dialogues"] = []
-            char["dialogues"].extend(char_dialogues)
+        # Read details about character
+        with open(full_path, 'r', encoding='utf-8') as yaml_file:
+            char_data = yaml.load(yaml_file)
 
-    for char in tqdm(chars):
-        topics = char["topics"]
-        for topic in topics:
-            key = get_dialogue_key(char, topic)
-            if key in existing_keys:
-                print(f"Skipping {key}")
-                continue
-            batch.append((char, topic))
-            if len(batch) != request_batch_size:
-                continue
-            dialogues = process_batch(batch, "gpt-3.5-turbo-16k", template_path)
-            add_dialogues(dialogues)
-            batch = []
+        # Generate chats with character
+        dialogues = process_batch(
+            [(char_data, topic) for topic in char_data["topics"]],
+            model_name,
+            template_path
+        )
 
-            write_jsonl(chars, output_path + "_tmp")
-            shutil.move(output_path + "_tmp", output_path)
+        # Update dialogues fields
+        if "dialogues" in char_data:
+            char_data["dialogues"].extend(dialogues)
+        else:
+            char_data["dialogues"] = dialogues
 
-    if batch:
-        dialogues = process_batch(batch, "gpt-3.5-turbo-16k", template_path)
-        add_dialogues(dialogues)
-
-    write_jsonl(chars, output_path + "_tmp")
-    shutil.move(output_path + "_tmp", output_path)
+        # Save chats to original file
+        with open(full_path, 'w', encoding='utf-8') as yaml_file:
+            yaml.dump(char_data, yaml_file)
 
 
 if __name__ == "__main__":
-    main(
-        'character_topics.jsonl',
-        'character_chats.jsonl',
+    generate_char_chats(
+        'characters',
         'instructs/ru_char_chat.txt'
     )
