@@ -80,7 +80,7 @@ def generate_char_topics(
             # Save topics to original file
             with open(full_path, 'w', encoding='utf-8') as yaml_file:
                 yaml.dump(updated_char, yaml_file)
-                print(f"File {filename} successfully updated.")
+                # print(f"File {filename} successfully updated.")
 
 
 if __name__ == "__main__":

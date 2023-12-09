@@ -1,7 +1,7 @@
 /.idea/
 /venv/
 /*.jsonl
-/old_1/
+/old_*/
 /characters/skip/
 /test
 /topics.bak
