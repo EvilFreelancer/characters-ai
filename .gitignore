@@ -1,5 +1,6 @@
 /.idea/
 /venv/
+/*.json
 /*.jsonl
 /old_*/
 /characters/skip/

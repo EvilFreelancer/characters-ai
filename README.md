@@ -1,3 +1,8 @@
+# Character AI dataset generator
+
+This collection of scripts will help you generate dataserts for training your own
+Large Language Model (LLM) on it.
+
 ## Character object example
 
 First you need to prepare a YML config with basic information about character.
