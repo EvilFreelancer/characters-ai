@@ -44,21 +44,22 @@ def main(train_path, val_path):
     records = []
 
     chars_rp_records = []
-    with open('characters.json', 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        for dialogue in data["dialogues"]:
-            chat = dialogue["chat"]
-            for message in chat:
-                if message["role"] == "char":
-                    message["role"] = "bot"
-                if message["role"] == "operator":
-                    message["role"] = "user"
-            system_messages = build_char_system_messages(data)
-            chat = system_messages + chat
-            chars_rp_records.append({
-                "messages": chat,
-                "source": "characters_roleplay"
-            })
+    with open('characters.jsonl', 'r', encoding='utf-8') as f:
+        for character in f:
+            data = json.loads(character)
+            for dialogue in data["dialogues"]:
+                chat = dialogue["chat"]
+                for message in chat:
+                    if message["role"] == "char":
+                        message["role"] = "bot"
+                    if message["role"] == "operator":
+                        message["role"] = "user"
+                system_messages = build_char_system_messages(data)
+                chat = system_messages + chat
+                chars_rp_records.append({
+                    "messages": chat,
+                    "source": "characters_roleplay"
+                })
     print("Characters roleplay count:", len(chars_rp_records))
     print("Characters roleplay max length:", calc_max_length(chars_rp_records))
     records += chars_rp_records
